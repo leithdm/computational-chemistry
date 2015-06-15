@@ -1,0 +1,1006 @@
+program p3amph
+
+c  ************************************************************************
+c  Unit cell of a polythiophene amphiphile 3-substituted on the upper side
+c  with an alkyl and on the lower side with a -(CH2-CH2-O-)n- oxanoyl chain.
+c  A slab of water molecules is created, and positioned so that the oxanoyl
+c  side chains and the polythiophene rings are 'submerged' in the water, 
+c  but the alkyl chains are extended away from the water surface.
+c  The bithiophene repeat unit for the octyl and pentaoxanoyl substituted
+c  polymer contains 70 atoms.
+c  ************************************************************************
+
+	character title*20,line*80
+	character*12 plf,glpf,dlpf
+	character*1 aplt,agulp,hand,ator,aq,aris,adop,a1
+	character*4 at,ata,ad,adp,atd0,atd,tempa,ae,at1,aw
+	dimension c1(4999,3),q1(4999),at1(4999)
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/aarrays/ at(4999),ata(100),ae(100),aw(5999)
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/rscalars/ pi,raddeg,degrad,tau,th,scp,alayer,depth,surf,
+     1		bed,dens
+	common/char/ title
+	common/blockdat/ bb,x,z
+
+	pi=4.0*atan(1.0)
+	raddeg=180.0/pi
+	degrad=pi/180.0
+	disc=1d-5
+
+	iscell=1
+	nna=1
+	nnb=1
+	nnc=1
+
+c  Molecular geometry:
+c  Kitaigorodsky, Molecular Crystals & Molecules (AP 1973).
+	rcc=1.535
+	rch=1.1
+	theta1=112.2*degrad
+	theta2=106.3*degrad
+	theta3=107.7*degrad
+	th1=theta1/2.0
+	th2=theta2/2.0
+	th3=theta3/2.0
+
+12	na=14
+
+	open(10,file='mol_data',status='unknown') 
+	open(13,file='CONFIG',status='unknown') 
+	open(12,file='s.dat',status='unknown') 
+
+	write(*,2000)nc
+	write(10,2000)nc
+
+c  Initially the polymer main chain is along z and the sidechains
+c  are constructed in the xz plane.  Main chain stacking is along b.
+
+c  Generate the alkyl chain in the z direction ...
+	call alkyl
+
+c  ... and attach it to position 3 of the dithiophene unit.
+	do iaa=1,naa
+	  ii=na+iaa
+	  do j=1,3
+	    c(ii,j)=ca(iaa,j)+c(3,j)
+	  enddo
+	  at(ii)=ata(iaa)
+	enddo
+	nii=ii
+
+c  Calculate the angle (ph) through which the alkyl chain is to be rotated,
+	z0=c(7,3)-c(3,3)
+	x0=c(7,1)-c(3,1)
+	angle0=atan(x0/z0)
+	z1=c(na+1,3)-c(3,3)
+	x1=c(na+1,1)-c(3,1)
+	angle1=atan(x1/z1)
+	ph=angle1-angle0
+
+c ... and rotate through ph.
+	do iaa=1,naa
+	  ii=na+iaa
+	  cx=c(ii,1)-c(3,1)
+	  cz=c(ii,3)-c(3,3)
+	  call rot1(cz,cx,-ph)
+	  c(ii,1)=cx+c(3,1)
+	  c(ii,3)=cz+c(3,3)
+	enddo
+
+c  Attach the oxanoyl chain to position 10 of the dithiophene unit ...
+	call oxanoyl
+	do iaa=1,nae
+	  ce(iaa,1)=-ce(iaa,1)
+	  ii=nii+iaa
+	  do  j=1,3
+	    c(ii,j)=ce(iaa,j)+c(10,j)
+	  enddo
+	  at(ii)=ae(iaa)
+	enddo
+	niii=ii
+	nat=niii-2
+
+c  ... and rotate it.
+	do iaa=1,nae
+	  ii=nii+iaa
+	  cx=c(ii,1)-c(10,1)
+	  cz=c(ii,3)-c(10,3)
+	  call rot1(cz,cx,+ph)
+	  c(ii,1)=cx+c(10,1)
+	  c(ii,3)=cz+c(10,3)
+	enddo
+
+c  Eliminate the H atoms originally at positions 3 and 10 (atoms 7 & 13).
+	do i=7,12
+	  do j=1,3
+	    c(i,j)=c(i+1,j)
+	  enddo
+	  at(i)=at(i+1)
+	enddo
+	do i=13,nat
+	  do  j=1,3
+	    c(i,j)=c(i+2,j)
+	  enddo
+	  at(i)=at(i+2)
+	enddo
+	na=na-2
+
+c  Orient the polymer chain with the alkyl chains up and the oxanoyl
+c  chains down.
+	do i=1,nat
+	  c(i,1)=-c(i,1)
+	enddo	
+
+c  Repeat distance along polymer main chain
+	czz=c(7,3)-c(4,3)
+	cc=c(10,3)-c(1,3)+czz
+
+c  At this point, 
+c  nc     = no. of C atoms in alkyl side-chain.
+c  na     = no. of atoms in each of the 2-ring pth C4SH-C4SH segments 
+c           in the unit cell (not including the side-chains).
+c  naa    = no. of atoms in alkyl side-chain CnH2n+1.
+c  nae    = no. of atoms in oxanoyl side-chain.
+c  nat    = total no. of atoms in chain within the unit cell.
+c           [nat = na + naa+nae].
+
+	write(*,2010)nc,naa,nae,nat
+	write(10,2010)nc,naa,nae,nat
+
+c  Apply 180 degree torsions to make cis CH2-CH2 segments in the oxanoyl bonds.
+	phi=180.0
+	call rot(9,12+naa+1,12+naa+2,nat,phi)
+c	n1=12+naa+5
+c	n2=nat-7
+c	do i=n1,n2,7
+c	phi=172.0
+c	  call rot(i,i+3,i+4,nat,phi)
+c	enddo
+
+c  Reassign cartesian components so that the main polymer chain is
+c  along x, the sidechains (if fully extended) approximately along 
+c  z and the polymer main chain is stacked along y. This means 
+c  interchanging x and z.
+	do i=1,nat
+	  ct3=c(i,1)
+	  ct1=c(i,3)
+	  c(i,3)=ct3
+	  c(i,1)=ct1
+	enddo
+	aa=cc
+
+
+c  Renumber the atoms so that the numbers of each side chain starts
+c  immediately after the last atom of the thiophene ring to which
+c  it is attached.
+c  Ring 1
+	do i=1,6
+	  do j=1,3
+	    c1(i,j)=c(i,j)
+	  enddo
+	  at1(i)=at(i)
+	enddo
+c  Alkyl chain
+	do i=1,naa
+	  do j=1,3
+	    c1(6+i,j)=c(12+i,j)
+	  enddo
+	  at1(6+i)=at(12+i)
+	enddo
+c  Ring 2
+	do i=1,6
+	  do j=1,3
+	    c1(6+naa+i,j)=c(6+i,j)
+	  enddo
+	  at1(6+naa+i)=at(6+i)
+	enddo
+c  Ether chain
+	do i=12+naa+1,nat
+	  do j=1,3
+	    c1(i,j)=c(i,j)
+	  enddo
+	  at1(i)=at(i)
+	enddo
+
+	do i=1,nat
+	  do j=1,3
+	    c(i,j)=c1(i,j)
+	  enddo
+	  at(i)=at1(i)
+	enddo
+
+c  Shift origin of z axis to the position of the upper set of S atoms
+	z0=c(6+naa+5,3)
+	do i=1,nat
+	  c(i,3)=c(i,3)-z0
+	enddo
+	
+c  Height of alkyl chains and depth of oxanoyl chains
+	hmx=c(1,3)
+	dmx=c(1,3)
+	do i=1,nat
+	 if(((at(i).eq.'C3').or.(at(i).eq.'H3')).
+     1		and.(c(i,3).gt.hmx))hmx=c(i,3)
+	 if((at(i).eq.'H4').and.(c(i,3).lt.dmx))dmx=c(i,3)
+	enddo
+	
+c  Overall thickness of monolayer
+	tmn=c(1,3)
+	tmx=c(1,3)
+	do i=1,nat
+	  if(c(i,3).lt.tmn)tmn=c(i,3)
+	  if(c(i,3).gt.tmx)tmx=c(i,3)
+	enddo
+	thkns=tmx-tmn
+
+	nna=4
+	nnb=4
+	k=nat
+	write(*,2040)aa,bb,2*nat*nna*nnb
+	write(10,2040)aa,bb,2*nat*nna*nnb
+
+	do ia=1,nna-1
+	  do i=1,nat
+	    k=k+1
+	    c(k,1)=c(i,1)+ia*aa
+	    c(k,2)=c(i,2)
+	    c(k,3)=c(i,3)
+	    at(k)=at(i)
+	  enddo
+	enddo
+	nat=k
+
+	do ib=1,nnb-1
+	  do i=1,nat
+	    k=k+1
+	    c(k,1)=c(i,1)
+	    c(k,2)=c(i,2)+ib*bb
+	    c(k,3)=c(i,3)
+	    at(k)=at(i)
+	  enddo
+	enddo
+	nat=k
+
+c  Create another chain at y=b/2 displaced by a/2 along a.
+	do i=1,nat
+	  c(i+nat,1)=c(i,1)+0.5*aa
+	  c(i+nat,2)=c(i,2)+0.5*bb
+	  c(i+nat,3)=c(i,3)
+	  at(i+nat)=at(i)
+	enddo
+
+	nscats=2*nat
+
+c  Keep the dimension of the basic cell as scp, the square cell parameter
+c  to be used to construct the water slab in subroutine water.
+	scp=aa
+
+	aa=nna*aa
+	bb=nnb*bb
+	cc=90.0		! dummy lattice vector along z
+
+	call water
+c	print*
+c	print*,'After emerging from subr. water'
+c	print*,'nmw,naw:',nmw,naw
+c	print*
+	if(3*(naw/3).ne.naw)then
+	  print*,'No. of atoms in water layer   = ',k
+	  print*,'Not a multiple of 3.  STOP.'
+	  stop
+	endif
+
+c  Extent of monolayer/water system along c axis
+	zmax=0.0
+	do i=1,nscats
+	  if(c(i,3).gt.zmax)zmax=c(i,3)
+	enddo
+	zmin=0.0
+	do i=1,nscats
+	  if(cw(i,3).lt.zmin)zmin=cw(i,3)
+	enddo
+	cc1=zmax-zmin
+	nats=nscats+naw
+
+	write(*,2018)
+	write(10,2018)
+	write(*,2020)nna,nnb,thkns,hmx,dmx,aa,bb,cc,dens,cc1,nscats
+     1		,nmw,naw,nats
+	write(10,2020)nna,nnb,thkns,hmx,dmx,aa,bb,cc,dens,cc1,nscats
+     1		,nmw,naw,nats
+
+c  Loop through the atoms of the polymer and solvent sublattices.  If any 
+c  atom-pair separation between water and polymer is less than a declared 
+c  distance, eliminate the offending water molecule.
+	k=0
+	elpar=0.5
+	iel=0
+	do iw=1,nmw
+	  do i3=1,3
+	    ia=(iw-1)*3+i3
+	    a1=aw(ia)
+	    if(a1.eq.'H')riw=0.5
+	    if(a1.eq.'O')riw=1.0
+	    if(riw.lt.0.1)then
+	      print*
+	      print*,'VdW radius!'
+	      print*,ia,' ',a1,' ',aw(ia),' ',riw
+	      stop
+            endif
+	    do ip=1,nscats
+	      a1=at(ip)
+	      if(a1.eq.'H')rip=0.5
+	      if(a1.eq.'C')rip=1.0
+	      if(a1.eq.'S')rip=1.0
+	      if(rip.lt.0.1)then
+	        print*
+	        print*,'VdW radius!'
+	        print*,ip,' ',a1,' ',at(ip),' ',rip
+	        stop
+              endif
+	      disc=riw+rip+elpar
+	      r2=0.0
+	      do j=1,3
+		r2=r2+(cw(ia,j)-c(ip,j))**2
+	      enddo
+	      s2p=(cw(ia,1)-c(ip,1)-aa)**2
+	      s2m=(cw(ia,1)-c(ip,1)+aa)**2
+	      do j=2,3
+		s2p=s2p+(cw(ia,j)-c(ip,j))**2
+		s2m=s2m+(cw(ia,j)-c(ip,j))**2
+	      enddo
+	      t2=(cw(ia,1)-c(ip,1))**2
+	      t2=t2+(cw(ia,3)-c(ip,3))**2
+	      t2p=t2+(cw(ia,2)-c(ip,2)-bb)**2
+	      t2m=t2+(cw(ia,2)-c(ip,2)+bb)**2
+	      r2=sqrt(r2)
+	      s2p=sqrt(s2p)
+	      s2m=sqrt(s2m)
+	      t2p=sqrt(t2p)
+	      t2m=sqrt(t2m)
+	      if((r2.lt.disc).or.(s2p.lt.disc).or.(s2m.lt.disc)
+     1		.or.(t2p.lt.disc).or.(t2m.lt.disc))then
+		iel=iel+1
+		goto 50
+	      endif
+	    enddo			! ip
+	  enddo				! i3
+	  do ia=1,3
+	    ii=(iw-1)*3+ia
+	    k=k+1
+	    do j=1,3
+	      cw(k,j)=cw(ii,j)
+	    enddo
+	    aw(k)=aw(ii)
+	  enddo
+50	  continue
+	enddo				! iw
+	naw=k
+
+	if(3*(naw/3).ne.naw)then
+	  print*,'New no. of atoms in water layer   = ',naw
+	  print*,'This is not a multiple of 3.  STOP.'
+	  stop
+	endif
+	nmw=naw/3
+	nats=nscats+naw
+	write(*,2050)iel
+	write(10,2050)iel
+
+c  Extent of monolayer/water system along c axis
+	zmax=0.0
+	do i=1,nscats
+	  if(c(i,3).gt.zmax)zmax=c(i,3)
+	enddo
+	zmin=0.0
+	do i=1,nscats
+	  if(cw(i,3).lt.zmin)zmin=cw(i,3)
+	enddo
+	cc1=zmax-zmin
+
+	write(*,2019)
+	write(10,2019)
+	write(*,2020)nna,nnb,thkns,hmx,dmx,aa,bb,cc,dens,cc1,nscats
+     1		,nmw,naw,nats
+	write(10,2020)nna,nnb,thkns,hmx,dmx,aa,bb,cc,dens,cc1,nscats
+     1		,nmw,naw,nats
+
+c  Write out an input (CONFIG) file for DL_POLY.
+	write(13,2140)nna,nnb,nnc,nc,nats,aa,bb,cc
+	do i=1,nscats
+	  write(13,2175)at(i),i
+	  write(13,2174)(c(i,j),j=1,3)
+	enddo
+	do i=1,naw
+	  write(13,2173)aw(i),i
+	  write(13,2174)(cw(i,j),j=1,3)
+	enddo
+	write(*,2080)
+	write(*,2061)
+	write(*,2067)
+	write(*,2061)
+
+c  For SCHAKAL
+c	write(12,2201)
+	write(12,2200)aa,bb,cc1
+	do i=1,nscats
+	  write(12,2210)at(i),c(i,1)/aa,c(i,2)/bb,(c(i,3)-zmin)/cc1
+	enddo
+	do i=1,naw
+	  write(12,2211)aw(i),cw(i,1)/aa,cw(i,2)/bb,(cw(i,3)-zmin)/cc1
+	enddo
+	write(12,2250)
+	write(*,2080)
+	write(*,2061)
+	write(*,2060)
+	write(*,2061)
+	write(*,2080)
+	write(*,2061)
+	write(*,2068)
+	write(*,2061)
+	write(*,2080)
+	write(*,2061)
+	write(*,2070)
+	write(*,2061)
+	write(*,2080)
+
+1000  format(a20)
+1010  format(a12)
+1020  format(a4,4f11.0)
+1030  format(a)
+
+2000  format( /15x,'*******************************************'
+     x		/15x,'Generation of the atoms in the unit cell of'
+     x		/15x,'a poly(3-alkyl, 3-pentaoxanoylthiophene)'
+     x		/15x,'monolayer on a water surface'
+     x		/15x,'*******************************************'/
+     x	/'Unit cell of polythiophene containing two kinds of side-'
+     x	/'chain in ring position 3. Alkyl (up) and pentaoxanoyl (down)'
+     x  /'groups alternate between the rings along the main chain.'
+     x /'In this calculation each alkyl group has ',i2,' carbon atoms.')
+2010	format(/'No. of C atoms in alkyl chain   =',i3/
+     1		'No. of atoms in alkyl chain     =',i3/
+     2		'No. of atoms in oxanoyl chain   =',i3/
+     3		'No. in bithiophene repeat unit  =',i3)
+2018	format(/'Before elimination of water molecules')
+2019	format(/'After elimination of water molecules')
+2020	format(i2,' x',i2,' supercell:'
+     x	/10x,'Thickness of monolayer          =',f9.4
+     x	/10x,'Max. height of monolayer        =',f9.4
+     x	/10x,'Max. depth of monolayer         =',f9.4
+     x	/10x,'a (polymer direction)           =',f9.4
+     x	/10x,'b (stacking direction)          =',f9.4
+     x	/10x,'c (normal to interface)         =',f9.4
+     x	/10x,'Density of water in water layer =',f9.4
+     x	/10x,'Extent of system along c axis   =',f9.4
+     x	/10x,'No. of pol atoms in cell        =',i6
+     x	/10x,'No. of water mols.              =',i6
+     x	/10x,'No. of water atoms              =',i6
+     x	/10x,'Total no. of atoms in cell      =',i6)
+2040  format(/'Rpt. dist. along pol. backbone (lattice a) =',f10.6/
+     1	      'Rpt. dist. for chain stacking  (lattice b) =',f10.6/
+     2	      'No. of atoms expected in supercell         =',i6)
+2050	format(/'No. of mols. eliminated from water sub-lattice =',i4)
+2061  format(5x,' ***********************************************',
+     1	'*********')
+2060  format(5x,' * * *      The i/p file for SCHAKAL is s.dat'
+     1	,'       * * *')
+2067  format(5x,' * * *      The i/p file for DL_POLY is CONFIG'
+     1	,'      * * *')
+2068  format(5x,' * * *      Water file for SCHAKAL is water.dat'
+     1	,'     * * *')
+2070  format(5x,' * * *      Screen data can be found in "mol_data"'
+     1	,'  * * *')
+2080  format(' ')
+2140	format(3i2,' cell   alk=',i2,1x,i6,' atoms'/9x,'0',9x,'2'
+     2	/f20.6,2(12x,'0.000000')
+     3	/12x,'0.000000',f20.6,12x,'0.000000',
+     4	/2(12x,'0.000000'),f20.6)
+2173  format(6x,a2,i10)
+2174  format(3f20.6)
+2175  format(7x,a1,i10)
+
+2200  format('title'/ 'cell ',3f9.4,' 90 90 90')
+2201  format('title'/ 'cell 1.0 1.0 1.0 90 90 90')
+2210  format('atom  ',a4,5x,3f15.6)
+2211  format('atom   ',a1,7x,3f15.6)
+c2250  format('end')
+2250  format('pack 0 2 0 1 0 1'/'end')
+
+      end
+
+
+	subroutine alkyl
+
+	character*4 at,ata,atd0,atd,ae
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/aarrays/ at(4999),ata(100),ae(100),aw(5999)
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/rscalars/ pi,raddeg,degrad,tau,th,scp,alayer,depth,surf,
+     1		bed,dens
+
+c  Molecular geometry:
+c  Kitaigorodsky, Molecular Crystals & Molecules (AP 1973)
+	rcc=1.535
+	rch=1.1
+	theta1=112.2*degrad
+	theta2=106.3*degrad
+	theta3=107.7*degrad
+	th1=theta1/2.0
+	th2=theta2/2.0
+	th3=theta3/2.0
+
+	if(nc.lt.1)then
+	  ca(1,1)=rch*cos(th1)
+	  ca(1,2)=0.0
+	  ca(1,3)=rch*sin(th1)
+	  ata(1)='H3'
+	  naa=1
+	  return
+	endif
+
+	do 50 ic=1,nc
+	ip=ic-2*(ic/2)
+	i=3*ic-2
+
+	ca(i,1)=ip*rcc*cos(th1)
+	ca(i,2)=0.0
+	ca(i,3)=ic*rcc*sin(th1)
+	ata(i)='C3'
+
+	ca(i+1,1)=ca(i,1)-(-1)**ip*rch*cos(th2)
+	ca(i+1,2)=rch*sin(th2)
+	ca(i+1,3)=ca(i,3)
+	ata(i+1)='H3'
+
+	ca(i+2,1)=ca(i+1,1)
+	ca(i+2,2)=-rch*sin(th2)
+	ca(i+2,3)=ca(i,3)
+	ata(i+2)='H3'
+
+50	continue
+
+	ip=nc-2*(nc/2)
+	ca(i+3,1)=ca(i,1)+(-1)**ip*rch*cos(th3)
+	ca(i+3,2)=0.0
+	ca(i+3,3)=ca(i,3)+rch*sin(th3)
+	ata(i+3)='H3'
+
+	naa=i+3
+
+	return
+	end
+
+
+	subroutine oxanoyl
+	character*4 at,ata,ad,adp,atd0,atd,tempa,ae
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/aarrays/ at(4999),ata(100),ae(100),aw(5999)
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/rscalars/ pi,raddeg,degrad,tau,th,scp,alayer,depth,surf,
+     1		bed,dens
+
+	rcc=1.492
+	rco=1.435
+	rch=1.1
+	cco=111.0*degrad
+	occ=111.0*degrad
+	coc=111.0*degrad
+	coh=109.0*degrad
+	hch=106.3*degrad
+	pcc=0.5*(2*pi-occ)
+	ccp=pcc
+	qo=0.0
+	qc=0.0
+	qh=0.0
+	proj=rch*cos(0.5*hch)
+	hght=rch*sin(0.5*hch)
+	nae=33
+	
+	do i=1,nae
+	  ce(i,2)=0.0
+	  ae(i)='H4'
+	enddo
+
+	do i=1,nae-1
+	  i1=7*((i+3)/7)-3
+	  if(i.eq.i1)then
+	    ae(i)='O4'
+	    ae(i-3)='C4'
+	    ae(i+1)='C4'
+	    if(i.eq.nae-1)then
+	      ae(i+1)='H4'
+	    endif
+	  endif
+	enddo
+
+	ce(1,1)=-rcc*cos(pcc)
+	ce(1,3)=rcc*sin(pcc)
+	ce(2,1)=ce(1,1)+proj*cos(pcc)
+	ce(2,3)=ce(1,3)+proj*sin(pcc)
+	ce(2,2)=+hght
+	ce(3,1)=ce(1,1)+proj*cos(pcc)
+	ce(3,3)=ce(1,3)+proj*sin(pcc)
+	ce(3,2)=-hght
+	ce(4,1)=ce(1,1)+rco
+	ce(4,3)=ce(1,3)
+	ce(5,1)=ce(4,1)-rco*cos(coc)
+	ce(5,3)=ce(4,3)+rco*sin(coc)
+	ce(6,1)=ce(5,1)+proj*cos(pcc)
+	ce(6,3)=ce(5,3)+proj*sin(pcc)
+	ce(6,2)=+hght
+	ce(7,1)=ce(5,1)+proj*cos(pcc)
+	ce(7,3)=ce(5,3)+proj*sin(pcc)
+	ce(7,2)=-hght
+	ce(8,1)=ce(5,1)+rcc
+	ce(8,3)=ce(5,3)
+	ce(9,1)=ce(8,1)-proj*cos(pcc)
+	ce(9,3)=ce(8,3)-proj*sin(pcc)
+	ce(9,2)=+hght
+	ce(10,1)=ce(8,1)-proj*cos(pcc)
+	ce(10,3)=ce(8,3)-proj*sin(pcc)
+	ce(10,2)=-hght
+	ce(11,1)=ce(8,1)-rcc*cos(cco)
+	ce(11,3)=ce(8,3)+rcc*sin(cco)
+	ce(12,1)=ce(11,1)+rco
+	ce(12,3)=ce(11,3)
+	ce(13,1)=ce(12,1)-proj*cos(pcc)
+	ce(13,3)=ce(12,3)-proj*sin(pcc)
+	ce(13,2)=+hght
+	ce(14,1)=ce(12,1)-proj*cos(pcc)
+	ce(14,3)=ce(12,3)-proj*sin(pcc)
+	ce(14,2)=-hght
+	ce(15,1)=ce(12,1)-rcc*cos(cco)
+	ce(15,3)=ce(12,3)+rcc*sin(cco)
+	ce(16,1)=ce(15,1)+proj*cos(pcc)
+	ce(16,3)=ce(15,3)+proj*sin(pcc)
+	ce(16,2)=+hght
+	ce(17,1)=ce(15,1)+proj*cos(pcc)
+	ce(17,3)=ce(15,3)+proj*sin(pcc)
+	ce(17,2)=-hght
+	ce(18,1)=ce(15,1)+rco
+	ce(18,3)=ce(15,3)
+	ce(19,1)=ce(18,1)-rco*cos(coc)
+	ce(19,3)=ce(18,3)+rco*sin(coc)
+	ce(20,1)=ce(19,1)+proj*cos(pcc)
+	ce(20,3)=ce(19,3)+proj*sin(pcc)
+	ce(20,2)=+hght
+	ce(21,1)=ce(19,1)+proj*cos(pcc)
+	ce(21,3)=ce(19,3)+proj*sin(pcc)
+	ce(21,2)=-hght
+	ce(22,1)=ce(19,1)+rcc
+	ce(22,3)=ce(19,3)
+	ce(23,1)=ce(22,1)-proj*cos(pcc)
+	ce(23,3)=ce(22,3)-proj*sin(pcc)
+	ce(23,2)=+hght
+	ce(24,1)=ce(22,1)-proj*cos(pcc)
+	ce(24,3)=ce(22,3)-proj*sin(pcc)
+	ce(24,2)=-hght
+	ce(25,1)=ce(22,1)-rco*cos(cco)
+	ce(25,3)=ce(22,3)+rco*sin(cco)
+	ce(26,1)=ce(25,1)+rco
+	ce(26,3)=ce(25,3)
+	ce(27,1)=ce(26,1)-proj*cos(pcc)
+	ce(27,3)=ce(26,3)-proj*sin(pcc)
+	ce(27,2)=+hght
+	ce(28,1)=ce(26,1)-proj*cos(pcc)
+	ce(28,3)=ce(26,3)-proj*sin(pcc)
+	ce(28,2)=-hght
+	ce(29,1)=ce(26,1)-rcc*cos(occ)
+	ce(29,3)=ce(26,3)+rcc*sin(occ)
+	ce(30,1)=ce(29,1)+proj*cos(pcc)
+	ce(30,3)=ce(29,3)+proj*sin(pcc)
+	ce(30,2)=+hght
+	ce(31,1)=ce(29,1)+proj*cos(pcc)
+	ce(31,3)=ce(29,3)+proj*sin(pcc)
+	ce(31,2)=-hght
+	ce(32,1)=ce(29,1)+rco
+	ce(32,3)=ce(29,3)
+	ce(33,1)=ce(32,1)-cos(coh)
+	ce(33,3)=ce(32,3)+sin(coh)
+
+1234	format('title'/'cell 1.0 1.0 1.0 90.0 90.0 90.0')
+2345	format('atom',4x,a4,5x,3f15.6)
+3456	format('end')
+
+	return
+	end
+	
+
+
+      subroutine rot1(c1,c2,ph)
+
+c  rotation of coordinates (c1,c2) by angle ph in their projected plane
+
+	g1=c1*cos(ph)-c2*sin(ph)
+	g2=c2*cos(ph)+c1*sin(ph)
+	c1=g1
+	c2=g2
+
+	return 
+	end
+
+
+	subroutine rot(ir,is,i1,i2,phi)
+
+c  Rotation of the coordinates of atoms i1 to i2 by an 
+c  angle phi around the bond between atoms ir and is.	#
+
+
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/rscalars/ pi,raddeg,degrad,tau,th,scp,alayer,depth,surf,
+     1		bed,dens
+
+c  Consider the bond |ir-is| as a vector V with components (dx,dy,dz).
+c  Its projection on the xz plane, rxz, makes an angle th1 with the z axis,
+c  and there is an angle th2 between the vector V and its component rxz.
+c	print*,'At start of "rot":'
+c	print*,ir,(c(ir,j),j=1,3)
+c	print*,is,(c(is,j),j=1,3)
+c	print*
+	dx=c(is,1)-c(ir,1)
+	dy=c(is,2)-c(ir,2)
+	dz=c(is,3)-c(ir,3)
+	rxz=sqrt(dx*dx+dz*dz)
+c	print*,'dx,dy,dz,rxz:',dx,dy,dz,rxz
+	th1=atan(abs(dx/dz))
+	if((dz.gt.0.0).and.(dx.lt.0.0))th1=-th1
+	if((dz.lt.0.0).and.(dx.gt.0.0))th1=pi-th1
+	if((dz.lt.0.0).and.(dx.lt.0.0))th1=pi+th1
+	th2=atan(dy/rxz)
+c	print*,'th2=',th2/degrad
+c	print*,'dx,dy,dz:',dx,dy,dz
+c	print*,'th1,th2:',th1*raddeg,th2*raddeg
+
+c  The coordinates of atoms i1 to i2 form a vector U.  We shall rotate U by 
+c  an angle phi around the direction of V by the following sequence of steps.
+c  1. Shift the origin of U to the atom ir, i.e. subtract the coordinates of
+c     ir from those in U.
+c  2. Rotate U by -th1 around y so that rxz now  lies along the z axis.
+c  3. Rotate U by -th2 around x so that vector V lies along the z axis.
+c  4. Apply the desired torsion by rotating U by phi around the z axis.
+c     Restore U to the previous coordinate system:
+c  5. Rotate U by +th2 around x.
+c  6. Rotate U by +th1 around y.
+c  7. Add the coordinates of ir to those of U.
+
+c	print*,'phi=',phi
+	phi=phi*degrad
+c	print*,'phi=',phi
+	do 20 i=i1,i2
+	do 10 j=1,3
+10	c(i,j)=c(i,j)-c(ir,j)
+	call rot1(c(i,3),c(i,1),-th1)
+	call rot1(c(i,3),c(i,2),-th2)
+	call rot1(c(i,1),c(i,2),phi)
+	call rot1(c(i,3),c(i,2),+th2)
+	call rot1(c(i,3),c(i,1),+th1)
+	do 15 j=1,3
+15	c(i,j)=c(i,j)+c(ir,j)
+20	continue
+
+	return
+	end
+
+
+
+	block data pth
+	character title*20,at*4,atd0*4,ata*4,atd*4
+	common/char/ title
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/blockdat/ bb,x,z
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/aarrays/ at(4999),ata(100),ae(100),aw(5999)
+
+	data bb,x,z/8.2000,0.0,0.00/
+	data nc/8/
+	data at(1),(c(1,j),j=1,3)/
+     1		'C1',-0.200637,0.0,-3.184683/
+	data at(2),(c(2,j),j=1,3)/
+     1		'C2',-1.482967,0.0,-2.661432/
+	data at(3),(c(3,j),j=1,3)/
+     1		'C2',-1.482967,0.0,-1.218432/
+	data at(4),(c(4,j),j=1,3)/
+     1		'C1',-0.200637,0.0,-0.695123/
+	data at(5),(c(5,j),j=1,3)/
+     1		'S1',+0.937997,0.0,-1.939903/
+	data at(6),(c(6,j),j=1,3)/
+     1		'H1',-2.350327,0.0,-3.303245/
+	data at(7),(c(7,j),j=1,3)/
+     1		'H1',-2.350327,0.0,-0.576619/
+	data at(8),(c(8,j),j=1,3)/
+     1		'C1',+0.200637,0.0,+0.695123/
+	data at(9),(c(9,j),j=1,3)/
+     1		'C2',+1.482967,0.0,+1.218432/
+	data at(10),(c(10,j),j=1,3)/
+     1		'C2',+1.482967,0.0,+2.661432/
+	data at(11),(c(11,j),j=1,3)/
+     1		'C1',+0.200637,0.0,+3.184683/
+	data at(12),(c(12,j),j=1,3)/
+     1		'S1',-0.937997,0.0,+1.939903/
+	data at(13),(c(13,j),j=1,3)/
+     1		'H1',+2.350327,0.0,+0.576619/
+	data at(14),(c(14,j),j=1,3)/
+     1		'H1',+2.350327,0.0,+3.303245/
+
+	end
+
+
+
+       subroutine water
+
+c  Create a water slab, consisting of nlr square layers of water molecules
+c  each layer of thickness alayer.  The positions of the ions are
+c  decided by those of the atoms of the COOX 'root' which dips below the
+c  surface of the water slab.
+c  With scp=4.15 A (see above) and alayer=0.85*scp the separation of the 
+c  water molecules in successive layers is 3.5275 A and in the same layer 
+c  the atoms in adjacent water molecules are separated by #.# and #.# A.
+
+	character*4 aw,label
+	common/rarrays/ c(4999,3),ca(100,3),ce(100,3),cw(5999,3),
+     1		label(5999)
+	common/aarrays/ at(4999),ata(100),ae(100),aw(5999)
+	common/iscalars/ nc,naa,ntbnds,nscats,ncells,nalks,nae,naw,nlr,
+     1		nna,nnb,nmw
+	common/rscalars/ pi,raddeg,degrad,tau,th,scp,alayer,depth,surf,
+     1		bed,dens
+
+	open(11,file='water.dat',status='unknown') 
+	mma=5
+	mmb=5
+	wscp=scp*nna/mma
+        nlr=20			! no. of 'layers' of water molecules
+	alayer=0.2500*wscp      ! thickness of each 'layer'
+        roh=1.0			! O-H bond length
+        angle=109.47*degrad     ! H-O-H angle
+	wlevel=-0.0
+
+        aw(1) = 'OW'
+        aw(2) = 'HW'
+        aw(3) = 'HW'
+        aw(4) = 'OW'
+        aw(5) = 'HW'
+        aw(6) = 'HW'
+      
+c  Produce a column of water molecules nlr cells high
+       k=0
+       do i=1,6*nlr
+        k=k+1
+        ip=k-2*(k/2)
+          do j=1,3
+             cw(i,j)=0.0
+          enddo
+        enddo
+
+        do id=1,nlr
+          ip=id-2*(id/2)
+          ii=6*(id-1)
+c  Water 1
+          cw(ii+1,1)=0.0
+          cw(ii+1,2)=0.0
+          cw(ii+1,3)=-(id-1)*alayer
+          cw(ii+2,1)=-(-1)**ip*roh
+          cw(ii+2,2)=0.0
+          cw(ii+2,3)=-(id-1)*alayer
+          cw(ii+3,1)=-(-1)**ip*roh*cos(angle)
+          cw(ii+3,2)=-(-1)**ip*roh*sin(angle)
+          cw(ii+3,3)=-(id-1)*alayer
+c  Water 2
+          cw(ii+4,1)=0.5*wscp
+          cw(ii+4,2)=cw(ii+4,1)
+          cw(ii+4,3)=-(id-1)*alayer
+          cw(ii+5,1)=cw(ii+4,1)
+          cw(ii+5,2)=cw(ii+4,2)+roh
+          cw(ii+5,3)=cw(ii+4,3)
+          cw(ii+6,1)=cw(ii+4,1)+(-1)**ip*roh*sin(angle)
+          cw(ii+6,2)=cw(ii+4,2)+roh*cos(angle)
+          cw(ii+6,3)=cw(ii+4,3)
+c  Assign atom symbols
+          aw(ii+1)='OW'
+          aw(ii+2)='HW'
+          aw(ii+3)='HW'
+          aw(ii+4)='OW'
+          aw(ii+5)='HW'
+          aw(ii+6)='HW'
+	  if(id.eq.nlr)then
+	    do i=1,6
+	      label(ii+1)='fx'
+	      label(ii+2)='fx'
+	      label(ii+3)='fx'
+	      label(ii+4)='fx'
+	      label(ii+5)='fx'
+	      label(ii+6)='fx'
+	    enddo
+	  endif
+
+        enddo
+        naw=ii+6
+        k=naw
+
+c  Extend the column into a (mma x mmb) supercell
+	do icell=1,mma-1
+	  do ia=1,naw
+	    k=k+1	
+	    cw(k,1)=cw(ia,1)+icell*wscp
+	    cw(k,2)=cw(ia,2)
+	    cw(k,3)=cw(ia,3)
+	    aw(k)=aw(ia)
+	  enddo
+	enddo
+	naw=k
+	do icell=1,mmb-1
+	  do ia=1,naw
+	    k=k+1	
+	    cw(k,1)=cw(ia,1)
+	    cw(k,2)=cw(ia,2)+icell*wscp
+	    cw(k,3)=cw(ia,3)
+	    aw(k)=aw(ia)
+	  enddo
+	enddo
+	naw=k
+
+c  Adjust the water level
+	do i=1,naw
+	  cw(i,3)=cw(i,3)+wlevel
+	enddo
+
+	bed=0.0
+	surf=-10.0
+        do i=1,naw
+	  if(cw(i,3).lt.bed)bed=cw(i,3)
+	  if(cw(i,3).gt.surf)surf=cw(i,3)
+        enddo
+	thkns=surf-bed
+
+	aaw=wscp*mma
+	bbw=wscp*mmb
+	ccw=thkns+alayer
+
+c  Density of water slab
+	nmw=naw/3
+	ww=nmw*(1.008*2+15.9994)*1.6605e-27
+	vw=aaw*bbw*ccw*1e-30
+	dens=ww/vw*1e3*1e-6
+	write(*,2040)nna,mma,scp,wscp,aaw,bbw,ccw,nmw,naw
+	write(10,2040)nna,mma,scp,wscp,aaw,bbw,ccw,nmw,naw
+
+	print*
+	print*,'Water slab unit cell:  ',aaw,bbw,ccw
+	print*,'contains',nmw,' water mols. (',naw,' atoms)'
+
+	write(11,2010)aaw,bbw,ccw
+        do i=1,naw
+	  if(cw(i,3).lt.bed)bed=cw(i,3)
+c	  write(11,2000)i,aw(i),(cw(i,j),j=1,3),label(i)
+	  write(11,2030)aw(i),cw(i,1)/aaw,cw(i,2)/bbw,cw(i,3)/ccw
+        enddo
+	write(11,2020)
+
+2000	format(i5,2x,a4,2x,3f10.4,2x,a2)
+2010	format('title'/'cell',3f9.4,'  90. 90. 90.')
+2015	format('title'/'cell 1.0 1.0 1.0 90. 90. 90.')
+2020	format('pack 0 1 0 1 0 1'/'end')
+2030	format('atom  ',a1,2x,3f10.4)
+2040	format(/'No. of bithiophene units along simulation cell =',i3
+     x	       /'No. of water basic cells along simulation cell =',i3
+     x	       /'Polymer lattice square cell parameter scp      =',f8.4
+     x	       /'Water lattice square cell parameter wscp       =',f8.4
+     x        //'Water slab unit cell commensurate with polymer cell:'
+     x	       /8x,3f8.4
+     x         /'(Contains',i5,' water molecules i.e.',i5,' atoms)')
+
+         return
+         end
