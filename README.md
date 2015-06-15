@@ -3,4 +3,4 @@ Fortran code for a molecular dynamics simulation of POOT - an amphiphilic polyme
 Check out this link for journal paper: http://www.slideshare.net/DarrenMartinLeith/a-molecular-dynamics-simulation-of-the-structure-and-properties-of-a-self-assembled-monolayer-formed-from-an-amphiphilic-polymer-on-a-water-surfa
 
 
-![Alt text](https://github.com/leithdm/Fortran-Computational-Chemistry/blob/master/screen_shot.png"POOT")
+![Alt text](https://github.com/leithdm/Fortran-Computational-Chemistry/blob/master/screen_shot.png "POOT")
